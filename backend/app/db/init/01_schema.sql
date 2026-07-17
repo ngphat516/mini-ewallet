@@ -15,6 +15,29 @@ CREATE TABLE Users (
 );
 GO
 
+-- ═══════════════════════════════════════════════════════════
+-- [FIX #3] Trigger tự cập nhật updated_at khi UPDATE Users.
+-- SQL Server không có ON UPDATE CURRENT_TIMESTAMP như MySQL,
+-- nên dùng trigger để DB tự lo, Python không phải nhớ set tay.
+-- ═══════════════════════════════════════════════════════════
+CREATE TRIGGER TR_Users_UpdatedAt
+ON Users
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    -- Chỉ update nếu cột updated_at KHÔNG nằm trong câu UPDATE gốc
+    -- (tránh vòng lặp và tránh ghi đè khi ai đó cố tình set updated_at)
+    IF NOT UPDATE(updated_at)
+    BEGIN
+        UPDATE u
+        SET u.updated_at = GETDATE()
+        FROM Users u
+        INNER JOIN inserted i ON u.user_id = i.user_id;
+    END
+END;
+GO
+
 -- ── RefreshTokens ─────────────────────────────────────────
 CREATE TABLE RefreshTokens (
     token_id    UNIQUEIDENTIFIER  PRIMARY KEY DEFAULT NEWID(),
@@ -76,81 +99,142 @@ CREATE INDEX IX_Txn_Type       ON Transactions(txn_type,       created_at DESC);
 CREATE INDEX IX_RefToken_User  ON RefreshTokens(user_id);
 GO
 
--- ── Stored Procedure: Transfer ────────────────────────────
-CREATE PROCEDURE sp_Transfer
+-- ═══════════════════════════════════════════════════════════
+-- Stored Procedure: Transfer (bản đã fix)
+-- CREATE OR ALTER: nếu DB đã tồn tại, chỉ cần chạy lại từ đây
+-- trở xuống là được, không cần tạo lại bảng.
+-- ═══════════════════════════════════════════════════════════
+CREATE OR ALTER PROCEDURE sp_Transfer
     @from_wallet_id  UNIQUEIDENTIFIER,
     @to_wallet_id    UNIQUEIDENTIFIER,
     @amount          DECIMAL(18,2),
+    @fee             DECIMAL(18,2) = 0.00,   -- [FIX #2] thêm tham số phí,
+                                             -- mặc định 0 nên code cũ gọi SP
+                                             -- không truyền fee vẫn chạy được
     @description     NVARCHAR(255),
     @reference_code  VARCHAR(30)
 AS
 BEGIN
     SET NOCOUNT ON;
-    SET XACT_ABORT ON;
+    SET XACT_ABORT OFF;  -- [FIX #4] tắt XACT_ABORT để TRY/CATCH tự kiểm soát
+                         -- rollback, sau đó còn INSERT được record FAILED
 
     DECLARE @from_bal_before DECIMAL(18,2);
     DECLARE @from_bal_after  DECIMAL(18,2);
     DECLARE @to_bal_before   DECIMAL(18,2);
     DECLARE @to_bal_after    DECIMAL(18,2);
+    DECLARE @total_debit     DECIMAL(18,2) = @amount + @fee;  -- [FIX #2]
+                                             -- người gửi bị trừ tiền + phí
 
-    BEGIN TRANSACTION;
+    BEGIN TRY
+        BEGIN TRANSACTION;
 
-        SELECT @from_bal_before = balance
-        FROM Wallets WITH (UPDLOCK, ROWLOCK)
-        WHERE wallet_id = @from_wallet_id AND status = 'ACTIVE';
+            -- ═══════════════════════════════════════════════
+            -- [FIX #1] Chống deadlock: LUÔN lock ví theo thứ tự
+            -- wallet_id tăng dần, bất kể ai là người gửi/nhận.
+            -- Nhờ vậy 2 giao dịch A→B và B→A cùng lúc sẽ xếp
+            -- hàng chờ nhau thay vì khóa chéo lẫn nhau.
+            -- ═══════════════════════════════════════════════
+            IF @from_wallet_id < @to_wallet_id
+            BEGIN
+                -- Lock ví gửi trước (ID nhỏ hơn)
+                SELECT @from_bal_before = balance
+                FROM Wallets WITH (UPDLOCK, ROWLOCK)
+                WHERE wallet_id = @from_wallet_id AND status = 'ACTIVE';
 
-        IF @from_bal_before IS NULL
-        BEGIN
+                SELECT @to_bal_before = balance
+                FROM Wallets WITH (UPDLOCK, ROWLOCK)
+                WHERE wallet_id = @to_wallet_id AND status = 'ACTIVE';
+            END
+            ELSE
+            BEGIN
+                -- Lock ví nhận trước (ID nhỏ hơn)
+                SELECT @to_bal_before = balance
+                FROM Wallets WITH (UPDLOCK, ROWLOCK)
+                WHERE wallet_id = @to_wallet_id AND status = 'ACTIVE';
+
+                SELECT @from_bal_before = balance
+                FROM Wallets WITH (UPDLOCK, ROWLOCK)
+                WHERE wallet_id = @from_wallet_id AND status = 'ACTIVE';
+            END
+
+            -- ── Validate (sau khi đã lock xong cả 2 ví) ──
+            IF @from_bal_before IS NULL
+                THROW 50001, 'SOURCE_WALLET_UNAVAILABLE', 1;
+                -- Ví gửi không tồn tại hoặc FROZEN/CLOSED
+
+            IF @to_bal_before IS NULL
+                THROW 50002, 'DEST_WALLET_UNAVAILABLE', 1;
+                -- Ví nhận không tồn tại hoặc FROZEN/CLOSED
+
+            IF @from_bal_before < @total_debit
+                THROW 50003, 'INSUFFICIENT_BALANCE', 1;
+                -- [FIX #2] so với amount + fee chứ không chỉ amount
+
+            -- ── Tính toán và cập nhật ──
+            SET @from_bal_after = @from_bal_before - @total_debit;  -- [FIX #2]
+            SET @to_bal_after   = @to_bal_before   + @amount;
+            -- Người nhận chỉ nhận @amount, phí không chuyển cho họ
+
+            UPDATE Wallets SET balance = @from_bal_after
+            WHERE wallet_id = @from_wallet_id;
+
+            UPDATE Wallets SET balance = @to_bal_after
+            WHERE wallet_id = @to_wallet_id;
+
+            INSERT INTO Transactions (
+                reference_code, txn_type,
+                from_wallet_id, to_wallet_id,
+                amount, fee,                              -- [FIX #2] ghi fee
+                from_balance_before, from_balance_after,
+                to_balance_before,   to_balance_after,
+                status, description
+            ) VALUES (
+                @reference_code, 'TRANSFER',
+                @from_wallet_id, @to_wallet_id,
+                @amount, @fee,
+                @from_bal_before, @from_bal_after,
+                @to_bal_before,   @to_bal_after,
+                'SUCCESS', @description
+            );
+
+        COMMIT;
+
+        SELECT 'SUCCESS' AS result, @from_bal_after AS new_balance;
+    END TRY
+    BEGIN CATCH
+        -- ═══════════════════════════════════════════════════
+        -- [FIX #4] Ghi lại giao dịch FAILED để thống kê/audit.
+        -- Phải ROLLBACK trước rồi mới INSERT, vì nếu insert bên
+        -- trong transaction thì rollback sẽ xóa luôn record này.
+        -- INSERT sau rollback chạy ở chế độ autocommit riêng.
+        -- ═══════════════════════════════════════════════════
+        IF @@TRANCOUNT > 0
             ROLLBACK;
-            RAISERROR('Source wallet not found or frozen', 16, 1);
-            RETURN;
-        END
 
-        IF @from_bal_before < @amount
-        BEGIN
-            ROLLBACK;
-            RAISERROR('Insufficient balance', 16, 1);
-            RETURN;
-        END
-
-        SELECT @to_bal_before = balance
-        FROM Wallets WITH (UPDLOCK, ROWLOCK)
-        WHERE wallet_id = @to_wallet_id AND status = 'ACTIVE';
-
-        IF @to_bal_before IS NULL
-        BEGIN
-            ROLLBACK;
-            RAISERROR('Destination wallet not found or frozen', 16, 1);
-            RETURN;
-        END
-
-        SET @from_bal_after = @from_bal_before - @amount;
-        SET @to_bal_after   = @to_bal_before   + @amount;
-
-        UPDATE Wallets SET balance = @from_bal_after
-        WHERE wallet_id = @from_wallet_id;
-
-        UPDATE Wallets SET balance = @to_bal_after
-        WHERE wallet_id = @to_wallet_id;
+        DECLARE @err_msg NVARCHAR(255) = ERROR_MESSAGE();
+        DECLARE @err_num INT           = ERROR_NUMBER();
 
         INSERT INTO Transactions (
             reference_code, txn_type,
             from_wallet_id, to_wallet_id,
-            amount,
-            from_balance_before, from_balance_after,
-            to_balance_before,   to_balance_after,
+            amount, fee,
+            from_balance_before,  -- balance lúc check (có thể NULL nếu
+            to_balance_before,    -- lỗi xảy ra trước khi kịp đọc)
             status, description
         ) VALUES (
             @reference_code, 'TRANSFER',
             @from_wallet_id, @to_wallet_id,
-            @amount,
-            @from_bal_before, @from_bal_after,
-            @to_bal_before,   @to_bal_after,
-            'SUCCESS', @description
+            @amount, @fee,
+            @from_bal_before,
+            @to_bal_before,
+            'FAILED', @err_msg    -- lưu lý do fail vào description
         );
 
-    COMMIT;
-
-    SELECT 'SUCCESS' AS result, @from_bal_after AS new_balance;
+        -- Ném lại lỗi gốc cho tầng Python (pyodbc) nhận được,
+        -- repository sẽ dịch mã lỗi 50001/50002/50003 thành
+        -- exception nghiệp vụ tương ứng
+        THROW;
+    END CATCH
 END;
-GO
+GO  
