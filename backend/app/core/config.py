@@ -1,6 +1,6 @@
 from pydantic_settings import BaseSettings
 from functools import lru_cache
-
+from urllib.parse import quote_plus 
 class Settings(BaseSettings):
     # ── SQL Server ─
     SQLSERVER_HOST: str
@@ -28,10 +28,12 @@ class Settings(BaseSettings):
         "case_sensitive": True,
     }
 
+    
+
     @property
     def SQLSERVER_URL(self) -> str:
         return (
-            f"mssql+pyodbc://{self.SQLSERVER_USER}:{self.SQLSERVER_PASSWORD}"
+            f"mssql+pyodbc://{self.SQLSERVER_USER}:{quote_plus(self.SQLSERVER_PASSWORD)}"
             f"@{self.SQLSERVER_HOST}:{self.SQLSERVER_PORT}/{self.SQLSERVER_DB}"
             f"?driver=ODBC+Driver+18+for+SQL+Server"
             f"&TrustServerCertificate=yes"
@@ -43,3 +45,4 @@ def get_settings() -> Settings:
     return Settings()
 
 settings = get_settings()
+
