@@ -6,7 +6,7 @@ from app.core.exceptions import AppException, app_exception_handler
 from app.db.mongodb import connect_mongo, close_mongo, get_mongo_db
 from app.db.sqlserver import engine  
 from app.db.redis import get_redis 
-
+from app.api.v1.auth import router as auth_router
 # ── Khối 2: định nghĩa lifespan (phải có TRƯỚC khi tạo app,
 #    vì dòng tạo app cần trao nó vào) ──
 @asynccontextmanager
@@ -24,7 +24,7 @@ app = FastAPI(title="Mini E-Wallet", lifespan=lifespan)
 
 # ── Khối 4: nối dây vào app duy nhất đó ──
 app.add_exception_handler(AppException, app_exception_handler)
-
+app.include_router(auth_router)
 @app.get("/health")
 async def health_check():
     status = {}
