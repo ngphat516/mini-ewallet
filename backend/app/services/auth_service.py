@@ -2,6 +2,7 @@
 from sqlalchemy.orm import Session
 
 from app.repositories.user_repo import UserRepository
+from app.repositories.wallet_repo import WalletRepository 
 from app.core.security import hash_password, verify_password, create_access_token, create_refresh_token
 from app.core.exceptions import UserAlreadyExistsException, InvalidCredentialsException
 from app.schemas.user import RegisterRequest, LoginRequest, UserResponse, TokenResponse
@@ -24,7 +25,11 @@ class AuthService:
             phone=data.phone,
             password_hash=hashed,
         )
+        db.flush()                       
 
+        wallet_repo = WalletRepository(db)             
+        wallet_repo.create(user_id=new_user.user_id) 
+            
         db.commit()                                    
 
         return UserResponse.model_validate(new_user)    
