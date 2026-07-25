@@ -28,11 +28,36 @@ class InvalidCredentialsException(AppException):
     message = "Email hoặc mật khẩu không đúng"
 
 
+# ── Lỗi nghiệp vụ user ────────────────────────
+class UserAlreadyExistsException(AppException):
+    status_code = 409
+    error_code = "USER_EXISTS"
+    message = "Email đã được đăng ký"
+
+
+class UserNotVerifiedException(AppException):
+    status_code = 403
+    error_code = "USER_NOT_VERIFIED"
+    message = "Tài khoản chưa được xác minh"
+
+
+class UserInactiveException(AppException):
+    status_code = 403
+    error_code = "USER_INACTIVE"
+    message = "Tài khoản đã bị vô hiệu hóa"
+
+
 # ── Lỗi nghiệp vụ ví ──────────────────────────
 class WalletNotFoundException(AppException):
     status_code = 404
     error_code = "WALLET_NOT_FOUND"
     message = "Không tìm thấy ví"
+
+
+class WalletFrozenException(AppException):
+    status_code = 400
+    error_code = "WALLET_FROZEN"
+    message = "Ví đang bị khóa hoặc đã đóng"
 
 
 class InsufficientBalanceException(AppException):
@@ -41,26 +66,6 @@ class InsufficientBalanceException(AppException):
     message = "Số dư không đủ để thực hiện giao dịch"
 
 
-class UserAlreadyExistsException(AppException):
-    status_code = 409
-    error_code = "USER_EXISTS"
-    message = "Email đã được đăng ký"
-
-class WalletFrozenException(AppException):
-    status_code = 400
-    error_code = "WALLET_FROZEN"
-    message = "Ví đang bị khóa hoặc đã đóng"     
-
-class UserNotVerifiedException(AppException):
-    status_code = 403
-    error_code = "USER_NOT_VERIFIED"
-    message = "Tài khoản chưa được xác minh"       
-
-class UserInactiveException(AppException):
-    status_code = 403
-    error_code = "USER_INACTIVE"
-    message = "Tài khoản đã bị vô hiệu hóa"
-    
 # ── Handler: chuyển exception thành JSON response ──
 async def app_exception_handler(request: Request, exc: AppException):
     return JSONResponse(
