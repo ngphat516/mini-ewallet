@@ -62,8 +62,25 @@ CREATE TABLE Wallets (
     status         VARCHAR(10)       NOT NULL DEFAULT 'ACTIVE'
                    CONSTRAINT CHK_Wallet_Status
                    CHECK (status IN ('ACTIVE','FROZEN','CLOSED')),
-    created_at     DATETIME2         NOT NULL DEFAULT GETDATE()
+    created_at     DATETIME2         NOT NULL DEFAULT GETDATE(),
+    updated_at     DATETIME2         NOT NULL DEFAULT GETDATE()
 );
+GO
+
+CREATE TRIGGER TR_Wallets_UpdatedAt
+ON Wallets
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    IF NOT UPDATE(updated_at)
+    BEGIN
+        UPDATE w
+        SET w.updated_at = GETDATE()
+        FROM Wallets w
+        INNER JOIN inserted i ON w.wallet_id = i.wallet_id;
+    END
+END;
 GO
 
 -- ── Transactions ──────────────────────────────────────────
