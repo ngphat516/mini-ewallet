@@ -31,6 +31,13 @@ class WalletRepository:
             .first()
         )
 
+    def get_by_account_number(self, account_number: str) -> Wallet | None:
+        return (
+            self.db.query(Wallet)
+            .filter(Wallet.account_number == account_number)
+            .first()
+        )
+
     def create(self, user_id) -> Wallet:
         wallet = Wallet(
             user_id=user_id,

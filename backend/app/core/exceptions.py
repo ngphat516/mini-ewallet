@@ -66,6 +66,32 @@ class InsufficientBalanceException(AppException):
     message = "Số dư không đủ để thực hiện giao dịch"
 
 
+# ── Lỗi nghiệp vụ giao dịch / chuyển tiền ─────
+# (khớp với lỗi 50001/50002/50003 do stored procedure sp_Transfer THROW ra)
+class TransactionNotFoundException(AppException):
+    status_code = 404
+    error_code = "TRANSACTION_NOT_FOUND"
+    message = "Không tìm thấy giao dịch"
+
+
+class RecipientWalletNotFoundException(AppException):
+    status_code = 404
+    error_code = "RECIPIENT_WALLET_NOT_FOUND"
+    message = "Số tài khoản người nhận không tồn tại"
+
+
+class RecipientWalletFrozenException(AppException):
+    status_code = 400
+    error_code = "RECIPIENT_WALLET_FROZEN"
+    message = "Ví người nhận đang bị khóa hoặc đã đóng"
+
+
+class SameWalletTransferException(AppException):
+    status_code = 400
+    error_code = "SAME_WALLET_TRANSFER"
+    message = "Không thể chuyển tiền đến chính ví của bạn"
+
+
 # ── Handler: chuyển exception thành JSON response ──
 async def app_exception_handler(request: Request, exc: AppException):
     return JSONResponse(
