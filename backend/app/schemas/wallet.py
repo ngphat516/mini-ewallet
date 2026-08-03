@@ -23,6 +23,7 @@ class WithdrawRequest(DepositRequest):
 class WalletResponse(BaseModel):
     wallet_id: UUID
     user_id: UUID
+    account_number: str
     balance: Decimal
     currency: str
     status: str

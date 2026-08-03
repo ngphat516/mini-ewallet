@@ -9,6 +9,7 @@ from app.core.exceptions import (
     InsufficientBalanceException,
 )
 from app.schemas.wallet import WalletResponse
+from app.services.transaction_service import transaction_service
 
 
 class WalletService:
@@ -38,7 +39,9 @@ class WalletService:
         if wallet.status != "ACTIVE":
             raise WalletFrozenException()
 
+        balance_before = wallet.balance
         wallet.balance += amount
+        transaction_service.record_deposit(db, wallet, amount, balance_before)
         db.commit()
         db.refresh(wallet)
 
@@ -55,7 +58,9 @@ class WalletService:
         if wallet.balance < amount:
             raise InsufficientBalanceException()
 
+        balance_before = wallet.balance
         wallet.balance -= amount
+        transaction_service.record_withdraw(db, wallet, amount, balance_before)
         db.commit()
         db.refresh(wallet)
 
