@@ -1,6 +1,7 @@
 
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 from app.core.exceptions import AppException, app_exception_handler
 from app.db.mongodb import connect_mongo, close_mongo, get_mongo_db
@@ -8,6 +9,7 @@ from app.db.sqlserver import engine
 from app.db.redis import get_redis 
 from app.api.v1.auth import router as auth_router
 from app.api.v1.wallets import router as wallets_router
+from app.api.v1.transactions import router as transactions_router
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -22,12 +24,21 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Mini E-Wallet", lifespan=lifespan)
 
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 app.add_exception_handler(AppException, app_exception_handler)
 
 app.include_router(auth_router)
 
-app.include_router(wallets_router);
+app.include_router(wallets_router)
+
+app.include_router(transactions_router)
 
 @app.get("/health")
 async def health_check():

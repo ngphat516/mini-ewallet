@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 from app.repositories.user_repo import UserRepository
 from app.repositories.wallet_repo import WalletRepository 
 from app.core.security import hash_password, verify_password, create_access_token, create_refresh_token
-from app.core.exceptions import UserAlreadyExistsException, InvalidCredentialsException
+from app.core.exceptions import UserAlreadyExistsException, InvalidCredentialsException, UnauthorizedException
 from app.schemas.user import RegisterRequest, LoginRequest, UserResponse, TokenResponse
 
 
@@ -48,6 +48,15 @@ class AuthService:
         refresh_token = create_refresh_token(str(user.user_id))
 
         return TokenResponse(access_token=access_token, refresh_token=refresh_token)
+
+    def get_me(self, db: Session, user_id) -> UserResponse:
+        repo = UserRepository(db)
+
+        user = repo.get_by_id(user_id)
+        if not user:
+            raise UnauthorizedException()
+
+        return UserResponse.model_validate(user)
 
 
 auth_service = AuthService()
