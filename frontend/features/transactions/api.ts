@@ -3,8 +3,15 @@ import type { Transaction, TransactionHistory, TransactionType } from "@/types/m
 import type { TransferInput } from "./schemas";
 
 // POST /transactions/transfer
-export async function transferRequest(data: TransferInput): Promise<Transaction> {
-  const res = await apiClient.post<Transaction>("/transactions/transfer", data);
+export interface TransferMutationInput {
+  data: TransferInput;
+  idempotencyKey: string;
+}
+
+export async function transferRequest({ data, idempotencyKey }: TransferMutationInput): Promise<Transaction> {
+  const res = await apiClient.post<Transaction>("/transactions/transfer", data, {
+    headers: { "Idempotency-Key": idempotencyKey },
+  });
   return res.data;
 }
 

@@ -16,6 +16,12 @@ from app.core.exceptions import (
     SameWalletTransferException,
 )
 from app.schemas.transaction import TransactionResponse, TransactionHistoryResponse
+from app.repositories.idempotency_repo import IdempotencyRepository
+from app.services.idempotency_service import (
+    request_fingerprint,
+    ensure_same_request,
+    ensure_completed,
+)
 
 
 class TransactionService:
@@ -56,10 +62,31 @@ class TransactionService:
         user_id,
         to_account_number: str,
         amount: Decimal,
+        idempotency_key: str,
         description: str | None = None,
     ) -> TransactionResponse:
         wallet_repo = WalletRepository(db)
         repo = TransactionRepository(db)
+        idem_repo = IdempotencyRepository(db)
+        fingerprint = request_fingerprint(
+            "TRANSFER",
+            to_account_number=to_account_number,
+            amount=amount,
+            description=description,
+        )
+
+        idempotency, is_owner = idem_repo.claim(
+            user_id=user_id,
+            key=idempotency_key,
+            operation="TRANSFER",
+            request_hash=fingerprint,
+        )
+        ensure_same_request(idempotency, "TRANSFER", fingerprint)
+        if not is_owner:
+            ensure_completed(idempotency)
+            return TransactionResponse.model_validate(
+                repo.get_by_id(idempotency.transaction_id)
+            )
 
         sender = wallet_repo.get_by_user_id(user_id)
         if not sender:
@@ -93,9 +120,12 @@ class TransactionService:
                 raise InsufficientBalanceException()
             raise
 
-        db.commit()
-
         transaction = repo.get_by_reference_code(reference_code)
+        idem_repo.complete(
+            idempotency,
+            transaction_id=transaction.txn_id,
+        )
+        db.commit()
         return TransactionResponse.model_validate(transaction)
 
     # ── Lịch sử giao dịch của ví đang đăng nhập ─────

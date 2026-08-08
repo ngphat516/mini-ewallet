@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
@@ -9,6 +10,7 @@ import { useWithdraw } from "../hooks";
 import { amountSchema, type AmountInput } from "../schemas";
 
 export function WithdrawForm() {
+  const [idempotencyKey, setIdempotencyKey] = useState(() => crypto.randomUUID());
   const { register, handleSubmit, setError, reset, formState: { errors } } =
     useForm<AmountInput>();
   const { mutate, isPending, error } = useWithdraw();
@@ -19,7 +21,10 @@ export function WithdrawForm() {
       setError("amount", { message: parsed.error.issues[0].message });
       return;
     }
-    mutate(parsed.data, { onSuccess: () => reset() });
+    mutate(
+      { data: parsed.data, idempotencyKey },
+      { onSuccess: () => { setIdempotencyKey(crypto.randomUUID()); reset(); } },
+    );
   };
 
   return (

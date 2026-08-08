@@ -1,7 +1,7 @@
 
 
 from uuid import UUID
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Header, Query
 from sqlalchemy.orm import Session
 
 from app.db.sqlserver import get_db
@@ -19,6 +19,7 @@ router = APIRouter(prefix="/transactions", tags=["transactions"])
 @router.post("/transfer", response_model=TransactionResponse)
 def transfer(
     data: TransferRequest,
+    idempotency_key: str = Header(..., alias="Idempotency-Key", min_length=8, max_length=64),
     db: Session = Depends(get_db),
     user_id: UUID = Depends(get_current_user_id),
 ):
@@ -28,6 +29,7 @@ def transfer(
         to_account_number=data.to_account_number,
         amount=data.amount,
         description=data.description,
+        idempotency_key=idempotency_key,
     )
 
 
