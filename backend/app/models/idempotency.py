@@ -16,9 +16,9 @@ class IdempotencyKey(Base):
     key = Column(String(64), nullable=False)
     operation = Column(String(20), nullable=False)
     request_hash = Column(String(64), nullable=False)
+    status = Column(String(12), nullable=False, server_default=text("'PROCESSING'"))
     transaction_id = Column(
-        UNIQUEIDENTIFIER, ForeignKey("Transactions.txn_id"), nullable=False
+        UNIQUEIDENTIFIER, ForeignKey("Transactions.txn_id"), nullable=True
     )
     response_balance = Column(Numeric(18, 2), nullable=True)
     created_at = Column(DateTime, nullable=False, server_default=text("GETDATE()"))
-

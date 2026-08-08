@@ -92,6 +92,18 @@ class SameWalletTransferException(AppException):
     message = "Không thể chuyển tiền đến chính ví của bạn"
 
 
+class IdempotencyConflictException(AppException):
+    status_code = 409
+    error_code = "IDEMPOTENCY_KEY_REUSED"
+    message = "Idempotency-Key đã được dùng cho một yêu cầu khác"
+
+
+class IdempotencyInProgressException(AppException):
+    status_code = 409
+    error_code = "IDEMPOTENCY_IN_PROGRESS"
+    message = "Yêu cầu với Idempotency-Key này đang được xử lý"
+
+
 # ── Handler: chuyển exception thành JSON response ──
 async def app_exception_handler(request: Request, exc: AppException):
     return JSONResponse(

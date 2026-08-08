@@ -116,6 +116,28 @@ CREATE INDEX IX_Txn_Type       ON Transactions(txn_type,       created_at DESC);
 CREATE INDEX IX_RefToken_User  ON RefreshTokens(user_id);
 GO
 
+-- ── Idempotency keys ─────────────────────────────────────
+-- Một key chỉ thuộc một user và trỏ tới giao dịch đã hoàn tất. Unique constraint
+-- là hàng rào cuối cùng khi hai request giống nhau tới hai worker đồng thời.
+CREATE TABLE IdempotencyKeys (
+    idempotency_id  UNIQUEIDENTIFIER PRIMARY KEY DEFAULT NEWID(),
+    user_id         UNIQUEIDENTIFIER NOT NULL REFERENCES Users(user_id),
+    [key]           VARCHAR(64) NOT NULL,
+    operation       VARCHAR(20) NOT NULL,
+    request_hash    CHAR(64) NOT NULL,
+    status          VARCHAR(12) NOT NULL DEFAULT 'PROCESSING'
+                    CONSTRAINT CHK_Idempotency_Status
+                    CHECK (status IN ('PROCESSING', 'COMPLETED')),
+    transaction_id UNIQUEIDENTIFIER NULL REFERENCES Transactions(txn_id),
+    response_balance DECIMAL(18,2) NULL,
+    created_at      DATETIME2 NOT NULL DEFAULT GETDATE(),
+    CONSTRAINT UQ_Idempotency_User_Key UNIQUE (user_id, [key])
+);
+GO
+
+CREATE INDEX IX_Idempotency_CreatedAt ON IdempotencyKeys(created_at);
+GO
+
 -- ═══════════════════════════════════════════════════════════
 -- Stored Procedure: Transfer (bản đã fix)
 -- CREATE OR ALTER: nếu DB đã tồn tại, chỉ cần chạy lại từ đây
@@ -254,4 +276,4 @@ BEGIN
         THROW;
     END CATCH
 END;
-GO  
+GO

@@ -2,7 +2,10 @@ import hashlib
 import json
 from decimal import Decimal
 
-from app.core.exceptions import IdempotencyConflictException
+from app.core.exceptions import (
+    IdempotencyConflictException,
+    IdempotencyInProgressException,
+)
 
 
 def request_fingerprint(operation: str, **payload) -> str:
@@ -23,3 +26,7 @@ def ensure_same_request(record, operation: str, fingerprint: str) -> None:
     if record.operation != operation or record.request_hash != fingerprint:
         raise IdempotencyConflictException()
 
+
+def ensure_completed(record) -> None:
+    if record.status != "COMPLETED" or record.transaction_id is None:
+        raise IdempotencyInProgressException()
