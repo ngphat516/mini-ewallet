@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
@@ -9,6 +10,7 @@ import { useTransfer } from "../hooks";
 import { transferSchema, type TransferInput } from "../schemas";
 
 export function TransferForm() {
+  const [idempotencyKey, setIdempotencyKey] = useState(() => crypto.randomUUID());
   const { register, handleSubmit, setError, reset, formState: { errors } } =
     useForm<TransferInput>();
   const { mutate, isPending, isSuccess, error } = useTransfer();
@@ -21,7 +23,10 @@ export function TransferForm() {
       }
       return;
     }
-    mutate(parsed.data, { onSuccess: () => reset() });
+    mutate(
+      { data: parsed.data, idempotencyKey },
+      { onSuccess: () => { setIdempotencyKey(crypto.randomUUID()); reset(); } },
+    );
   };
 
   return (

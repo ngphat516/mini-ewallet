@@ -9,13 +9,22 @@ export async function getMyWallet(): Promise<Wallet> {
 }
 
 // POST /wallets/deposit
-export async function depositRequest(data: AmountInput): Promise<Wallet> {
-  const res = await apiClient.post<Wallet>("/wallets/deposit", data);
+export interface WalletMutationInput {
+  data: AmountInput;
+  idempotencyKey: string;
+}
+
+export async function depositRequest({ data, idempotencyKey }: WalletMutationInput): Promise<Wallet> {
+  const res = await apiClient.post<Wallet>("/wallets/deposit", data, {
+    headers: { "Idempotency-Key": idempotencyKey },
+  });
   return res.data;
 }
 
 // POST /wallets/withdraw
-export async function withdrawRequest(data: AmountInput): Promise<Wallet> {
-  const res = await apiClient.post<Wallet>("/wallets/withdraw", data);
+export async function withdrawRequest({ data, idempotencyKey }: WalletMutationInput): Promise<Wallet> {
+  const res = await apiClient.post<Wallet>("/wallets/withdraw", data, {
+    headers: { "Idempotency-Key": idempotencyKey },
+  });
   return res.data;
 }

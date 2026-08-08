@@ -10,7 +10,9 @@ from app.core.exceptions import (
 
 def request_fingerprint(operation: str, **payload) -> str:
     normalized = {
-        key: format(value, "f") if isinstance(value, Decimal) else value
+        key: format(value.quantize(Decimal("0.01")), ".2f")
+        if isinstance(value, Decimal)
+        else value
         for key, value in payload.items()
     }
     body = json.dumps(

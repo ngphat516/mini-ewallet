@@ -66,15 +66,15 @@ class WalletService:
         balance_before = wallet.balance
         wallet.balance += amount
         transaction = transaction_service.record_deposit(db, wallet, amount, balance_before)
+        response = WalletResponse.model_validate(wallet)
         idem_repo.complete(
             idempotency,
             transaction_id=transaction.txn_id,
-            response_balance=wallet.balance,
+            response_balance=response.balance,
         )
         db.commit()
-        db.refresh(wallet)
 
-        return WalletResponse.model_validate(wallet)
+        return response
 
     def withdraw(self, db: Session, user_id, amount: Decimal, idempotency_key: str) -> WalletResponse:
         repo = WalletRepository(db)
@@ -108,15 +108,15 @@ class WalletService:
         balance_before = wallet.balance
         wallet.balance -= amount
         transaction = transaction_service.record_withdraw(db, wallet, amount, balance_before)
+        response = WalletResponse.model_validate(wallet)
         idem_repo.complete(
             idempotency,
             transaction_id=transaction.txn_id,
-            response_balance=wallet.balance,
+            response_balance=response.balance,
         )
         db.commit()
-        db.refresh(wallet)
 
-        return WalletResponse.model_validate(wallet)
+        return response
 
 
 wallet_service = WalletService()
