@@ -43,10 +43,17 @@ CREATE TABLE RefreshTokens (
     token_id    UNIQUEIDENTIFIER  PRIMARY KEY DEFAULT NEWID(),
     user_id     UNIQUEIDENTIFIER  NOT NULL
                 REFERENCES Users(user_id) ON DELETE CASCADE,
-    token_hash  VARCHAR(255)      NOT NULL UNIQUE,
+    session_id  UNIQUEIDENTIFIER  NOT NULL,
+    family_id   UNIQUEIDENTIFIER  NOT NULL,
+    token_hash  VARCHAR(64)       NOT NULL UNIQUE,
+    device_name NVARCHAR(255)     NOT NULL DEFAULT 'Unknown device',
+    ip_address  VARCHAR(45)       NULL,
     expires_at  DATETIME2         NOT NULL,
     revoked_at  DATETIME2         NULL,
-    created_at  DATETIME2         NOT NULL DEFAULT GETDATE()
+    revoked_reason VARCHAR(20)     NULL,
+    replaced_by_token_id UNIQUEIDENTIFIER NULL REFERENCES RefreshTokens(token_id),
+    created_at  DATETIME2         NOT NULL DEFAULT GETUTCDATE(),
+    last_used_at DATETIME2        NOT NULL DEFAULT GETUTCDATE()
 );
 GO
 

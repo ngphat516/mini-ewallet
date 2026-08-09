@@ -26,3 +26,28 @@ export async function getMe(): Promise<User> {
   const res = await apiClient.get<User>("/auth/me");
   return res.data;
 }
+
+export interface AuthSession {
+  session_id: string;
+  device_name: string;
+  ip_address: string | null;
+  created_at: string;
+  last_used_at: string;
+  expires_at: string;
+}
+
+export async function getSessions(): Promise<AuthSession[]> {
+  return (await apiClient.get<AuthSession[]>("/auth/sessions")).data;
+}
+
+export async function revokeSession(sessionId: string): Promise<void> {
+  await apiClient.delete(`/auth/sessions/${sessionId}`);
+}
+
+export async function logoutRequest(refreshToken: string): Promise<void> {
+  await apiClient.post("/auth/logout", { refresh_token: refreshToken });
+}
+
+export async function logoutAllRequest(): Promise<void> {
+  await apiClient.post("/auth/logout-all");
+}

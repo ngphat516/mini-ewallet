@@ -32,6 +32,10 @@ class LoginRequest(BaseModel):
     password: str
 
 
+class RefreshTokenRequest(BaseModel):
+    refresh_token: str = Field(..., min_length=1)
+
+
 
 class UserResponse(BaseModel):
     user_id: UUID
@@ -50,3 +54,19 @@ class TokenResponse(BaseModel):
     access_token: str
     refresh_token: str
     token_type: str = "bearer"
+
+
+class SessionResponse(BaseModel):
+    session_id: UUID
+    device_name: str
+    ip_address: str | None
+    created_at: datetime
+    last_used_at: datetime
+    expires_at: datetime
+    is_current: bool = False
+
+    model_config = {"from_attributes": True}
+
+
+class MessageResponse(BaseModel):
+    message: str
