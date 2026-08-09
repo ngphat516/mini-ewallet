@@ -14,5 +14,5 @@ export function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/wallet/:path*", "/transactions/:path*", "/transfer/:path*"],
+  matcher: ["/wallet/:path*", "/transactions/:path*", "/transfer/:path*", "/security/:path*"],
 };

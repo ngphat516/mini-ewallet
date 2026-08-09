@@ -29,6 +29,12 @@ class InvalidCredentialsException(AppException):
 
 
 # ── Lỗi nghiệp vụ user ────────────────────────
+class RefreshTokenReuseException(AppException):
+    status_code = 401
+    error_code = "REFRESH_TOKEN_REUSE"
+    message = "Phat hien refresh token cu bi tai su dung; phien da bi thu hoi"
+
+
 class UserAlreadyExistsException(AppException):
     status_code = 409
     error_code = "USER_EXISTS"

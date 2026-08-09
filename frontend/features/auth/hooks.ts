@@ -2,8 +2,8 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
-import { getMe, loginRequest, registerRequest } from "./api";
-import { setTokens, clearTokens } from "@/lib/auth-token";
+import { getMe, loginRequest, registerRequest, logoutRequest } from "./api";
+import { setTokens, clearTokens, getRefreshToken } from "@/lib/auth-token";
 import { useAuthStore } from "./store";
 
 export const authKeys = {
@@ -47,7 +47,11 @@ export function useLogout() {
   const queryClient = useQueryClient();
   const setAuthenticated = useAuthStore((s) => s.setAuthenticated);
 
-  return () => {
+  return async () => {
+    const refreshToken = getRefreshToken();
+    if (refreshToken) {
+      try { await logoutRequest(refreshToken); } catch { /* Always finish local logout. */ }
+    }
     clearTokens();
     setAuthenticated(false);
     queryClient.clear();

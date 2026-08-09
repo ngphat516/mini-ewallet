@@ -1,5 +1,7 @@
 # app/core/security.py
 from datetime import datetime, timedelta, timezone
+from uuid import uuid4
+import hashlib
 from passlib.context import CryptContext
 from jose import jwt, JWTError
 from app.core.config import settings
@@ -29,13 +31,21 @@ def create_access_token(user_id: str) -> str:
     return jwt.encode(payload, settings.JWT_SECRET, algorithm=settings.JWT_ALGORITHM)
 
 
-def create_refresh_token(user_id: str) -> str:
+def create_refresh_token(user_id: str, session_id: str, family_id: str | None = None) -> str:
     """Token dài hạn (7 ngày) chỉ dùng để xin access token mới"""
     expire = datetime.now(timezone.utc) + timedelta(
         days=settings.JWT_REFRESH_EXPIRE_DAYS
     )
-    payload = {"sub": user_id, "exp": expire, "type": "refresh"}
+    payload = {
+        "sub": user_id, "exp": expire, "type": "refresh",
+        "jti": str(uuid4()), "sid": session_id, "fid": family_id or session_id,
+    }
     return jwt.encode(payload, settings.JWT_SECRET, algorithm=settings.JWT_ALGORITHM)
+
+
+def hash_token(token: str) -> str:
+    """SHA-256 is safe because a signed refresh JWT has high entropy."""
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
 
 
 def decode_token(token: str, expected_type: str = "access") -> dict:

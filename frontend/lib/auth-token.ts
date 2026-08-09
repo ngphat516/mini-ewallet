@@ -32,6 +32,11 @@ export function getAccessToken(): string | null {
   return getCookie(ACCESS_TOKEN_COOKIE);
 }
 
+export function getRefreshToken(): string | null {
+  if (typeof document === "undefined") return null;
+  return getCookie(REFRESH_TOKEN_COOKIE);
+}
+
 export function clearTokens() {
   deleteCookie(ACCESS_TOKEN_COOKIE);
   deleteCookie(REFRESH_TOKEN_COOKIE);
