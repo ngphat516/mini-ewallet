@@ -23,11 +23,12 @@ class WalletRepository:
         return self.db.query(Wallet).filter(Wallet.user_id == user_id).first()
 
     def get_by_user_id_for_update(self, user_id) -> Wallet | None:
-
+        # SQL Server không hỗ trợ FOR UPDATE; dùng WITH (UPDLOCK, ROWLOCK)
+        # để khóa row ví cho tới khi commit, chống mất cập nhật (lost update).
         return (
             self.db.query(Wallet)
+            .with_hint(Wallet, "WITH (UPDLOCK, ROWLOCK)", dialect_name="mssql")
             .filter(Wallet.user_id == user_id)
-            .with_for_update()
             .first()
         )
 
