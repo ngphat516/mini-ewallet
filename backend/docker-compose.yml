@@ -1,52 +1,87 @@
-version: '3.9'
-
 services:
-  # ── Frontend ──────────────────────────────
   frontend:
-    build: ./frontend
-    ports: ["3000:3000"]
+    build:
+      context: ../frontend
+      args:
+        NEXT_PUBLIC_API_URL: http://localhost:8000
+    ports:
+      - "3000:3000"
     environment:
-      - NEXT_PUBLIC_API_URL=http://backend:8000
-    depends_on: [backend]
+      # This runs in the user's browser, where the Docker service name is unavailable.
+      NEXT_PUBLIC_API_URL: http://localhost:8000
+    depends_on:
+      backend:
+        condition: service_started
 
-  # ── Backend ───────────────────────────────
   backend:
-    build: ./backend
-    ports: ["8000:8000"]
+    build: .
+    ports:
+      - "8000:8000"
     environment:
-      - SQLSERVER_URL=mssql+pyodbc://sa:YourStrong@Pass123@sqlserver:1433/ebanking?driver=ODBC+Driver+18+for+SQL+Server
-      - MONGODB_URL=mongodb://mongo:27017/ebanking_logs
-      - REDIS_URL=redis://redis:6379/0
-      - JWT_SECRET=your-super-secret-key-change-this
-      - JWT_EXPIRE_MINUTES=15
-    depends_on: [sqlserver, mongo, redis]
+      SQLSERVER_HOST: sqlserver
+      SQLSERVER_PORT: 1433
+      SQLSERVER_DB: ebanking
+      SQLSERVER_USER: sa
+      SQLSERVER_PASSWORD: ${SQLSERVER_PASSWORD:?Set SQLSERVER_PASSWORD in backend/.env}
+      MONGODB_URL: mongodb://mongo:27017
+      MONGODB_DB: ebanking_logs
+      REDIS_URL: redis://redis:6379/0
+      JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in backend/.env}
+      JWT_ALGORITHM: HS256
+      JWT_EXPIRE_MINUTES: 15
+      JWT_REFRESH_EXPIRE_DAYS: 7
+    depends_on:
+      sql-init:
+        condition: service_completed_successfully
+      mongo:
+        condition: service_started
+      redis:
+        condition: service_started
 
-  # ── SQL Server ────────────────────────────
   sqlserver:
     image: mcr.microsoft.com/mssql/server:2022-latest
     environment:
-      - ACCEPT_EULA=Y
-      - SA_PASSWORD=YourStrong@Pass123
-      - MSSQL_PID=Developer
+      ACCEPT_EULA: "Y"
+      MSSQL_PID: Developer
+      SA_PASSWORD: ${SQLSERVER_PASSWORD:?Set SQLSERVER_PASSWORD in backend/.env}
+    ports:
+      - "1433:1433"
     volumes:
       - sqlserver_data:/var/opt/mssql
-      - ./db/init/01_schema.sql:/init.sql  # Script tạo bảng chạy lần đầu
-    ports: ["1433:1433"]
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P \"$$SA_PASSWORD\" -C -d master -Q \"SELECT 1\" || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
 
-  # ── MongoDB ───────────────────────────────
+  # Initializes a fresh database only; existing data is left untouched.
+  sql-init:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    environment:
+      SQLCMDPASSWORD: ${SQLSERVER_PASSWORD:?Set SQLSERVER_PASSWORD in backend/.env}
+    volumes:
+      - ./app/db/init/01_schema.sql:/init/01_schema.sql:ro
+      - ./scripts/init-sqlserver.sh:/init/init-sqlserver.sh:ro
+    entrypoint: ["/bin/bash", "/init/init-sqlserver.sh"]
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+
   mongo:
     image: mongo:7
+    ports:
+      - "27017:27017"
     volumes:
       - mongo_data:/data/db
-    ports: ["27017:27017"]
 
-  # ── Redis ─────────────────────────────────
   redis:
     image: redis:7-alpine
     command: redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru
+    ports:
+      - "6379:6379"
     volumes:
       - redis_data:/data
-    ports: ["6379:6379"]
 
 volumes:
   sqlserver_data:
