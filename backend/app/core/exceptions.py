@@ -41,6 +41,12 @@ class UserAlreadyExistsException(AppException):
     message = "Email đã được đăng ký"
 
 
+class PhoneAlreadyExistsException(AppException):
+    status_code = 409
+    error_code = "PHONE_EXISTS"
+    message = "Số điện thoại đã được đăng ký"
+
+
 class UserNotVerifiedException(AppException):
     status_code = 403
     error_code = "USER_NOT_VERIFIED"
