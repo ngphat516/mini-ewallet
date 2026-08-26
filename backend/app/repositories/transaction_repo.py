@@ -63,6 +63,7 @@ class TransactionRepository:
         to_balance_before: Decimal | None = None,
         to_balance_after: Decimal | None = None,
         fee: Decimal = Decimal("0.00"),
+        status: str = "SUCCESS",
         description: str | None = None,
         reference_code: str | None = None,
     ) -> Transaction:
@@ -71,6 +72,7 @@ class TransactionRepository:
             txn_type=txn_type,
             amount=amount,
             fee=fee,
+            status=status,
             from_wallet_id=from_wallet_id,
             to_wallet_id=to_wallet_id,
             from_balance_before=from_balance_before,
