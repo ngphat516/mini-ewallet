@@ -5,6 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy import text
 from app.core.exceptions import AppException, app_exception_handler
+from app.core.config import settings
 from app.db.mongodb import connect_mongo, close_mongo, get_mongo_db
 from app.db.sqlserver import engine  
 from app.db.redis import get_redis 
@@ -27,7 +28,7 @@ app = FastAPI(title="Mini E-Wallet", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
+    allow_origins=settings.cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
