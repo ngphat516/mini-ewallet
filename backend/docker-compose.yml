@@ -30,6 +30,7 @@ services:
       JWT_ALGORITHM: HS256
       JWT_EXPIRE_MINUTES: 15
       JWT_REFRESH_EXPIRE_DAYS: 7
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000}
     depends_on:
       sql-init:
         condition: service_completed_successfully
@@ -62,6 +63,8 @@ services:
       SQLCMDPASSWORD: ${SQLSERVER_PASSWORD:?Set SQLSERVER_PASSWORD in backend/.env}
     volumes:
       - ./app/db/init/01_schema.sql:/init/01_schema.sql:ro
+      - ./app/db/init/02_add_idempotency.sql:/migrations/02_add_idempotency.sql:ro
+      - ./app/db/init/03_auth_sessions.sql:/migrations/03_auth_sessions.sql:ro
       - ./scripts/init-sqlserver.sh:/init/init-sqlserver.sh:ro
     entrypoint: ["/bin/bash", "/init/init-sqlserver.sh"]
     depends_on:
