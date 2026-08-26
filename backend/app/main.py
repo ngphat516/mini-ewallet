@@ -2,6 +2,7 @@
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from sqlalchemy import text
 from app.core.exceptions import AppException, app_exception_handler
 from app.db.mongodb import connect_mongo, close_mongo, get_mongo_db
@@ -59,4 +60,8 @@ async def health_check():
         status["redis"] = "ok"
     except Exception as e:
         status["redis"] = f"lỗi: {type(e).__name__}"
-    return status
+
+    # A readiness endpoint must fail at the HTTP level, otherwise Docker or an
+    # orchestrator will keep routing traffic to an app with broken dependencies.
+    status_code = 200 if all(value == "ok" for value in status.values()) else 503
+    return JSONResponse(status_code=status_code, content=status)
