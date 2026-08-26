@@ -1,5 +1,6 @@
 from datetime import datetime, timezone
 from uuid import UUID, uuid4
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.repositories.user_repo import UserRepository
@@ -11,7 +12,8 @@ from app.core.security import (
 )
 from app.core.exceptions import (
     UserAlreadyExistsException, InvalidCredentialsException,
-    UnauthorizedException, RefreshTokenReuseException,
+    UnauthorizedException, RefreshTokenReuseException, UserInactiveException,
+    PhoneAlreadyExistsException,
 )
 from app.schemas.user import RegisterRequest, LoginRequest, UserResponse, TokenResponse, SessionResponse
 
@@ -26,16 +28,25 @@ class AuthService:
         repo = UserRepository(db)
         if repo.get_by_email(data.email):
             raise UserAlreadyExistsException()
-        user = repo.create(data.full_name, data.email, data.phone, hash_password(data.password))
-        db.flush()
-        WalletRepository(db).create(user_id=user.user_id)
-        db.commit()
+        if repo.get_by_phone(data.phone):
+            raise PhoneAlreadyExistsException()
+
+        try:
+            user = repo.create(data.full_name, data.email, data.phone, hash_password(data.password))
+            WalletRepository(db).create(user_id=user.user_id)
+            db.commit()
+        except IntegrityError:
+            # The DB constraint is the final safeguard against concurrent registration.
+            db.rollback()
+            raise UserAlreadyExistsException("Email or phone number is already registered")
         return UserResponse.model_validate(user)
 
     def login(self, db: Session, data: LoginRequest, device_name: str, ip_address: str | None) -> TokenResponse:
         user = UserRepository(db).get_by_email(data.email)
         if not user or not verify_password(data.password, user.password_hash):
             raise InvalidCredentialsException()
+        if not user.is_active:
+            raise UserInactiveException()
 
         session_id = uuid4()
         refresh_token = create_refresh_token(str(user.user_id), str(session_id))
@@ -63,6 +74,12 @@ class AuthService:
             raise UnauthorizedException("Refresh token khong hop le")
 
         now = utcnow_naive()
+        user = UserRepository(db).get_by_id(stored.user_id)
+        if not user or not user.is_active:
+            repo.revoke_all(stored.user_id, now, "ACCOUNT_DISABLED")
+            db.commit()
+            raise UserInactiveException()
+
         if stored.revoked_at is not None:
             if stored.revoked_reason == "ROTATED":
                 repo.revoke_session(stored.user_id, stored.session_id, now, "REUSE_DETECTED")
